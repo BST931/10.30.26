@@ -1,0 +1,69 @@
+#include <iostream>
+#include <vector>
+#include <memory> // Для std::shared_ptr
+
+
+class DataBlock {
+private:
+    
+    int data[1024];
+    int id; 
+
+public:
+    
+    DataBlock(int blockId) : id(blockId) {
+        std::cout << "[+] Конструктор: Выделена виртуальная страница для Блока #" << id << std::endl;
+    }
+
+   
+    ~DataBlock() {
+        std::cout << "[-] Деструктор: ОС освободила страницу у Блока #" << id << std::endl;
+    }
+};
+
+void scenario1_Leak() {
+    std::cout << "\n=== Сценарий 1: Утечка страниц памяти ===" << std::endl;
+
+    DataBlock* blocks = new DataBlock[3]{ DataBlock(1), DataBlock(2), DataBlock(3) };
+    delete blocks;
+
+    std::cout << "Программа завершена. Проверьте логи: деструкторы не вызвались!" << std::endl;
+    
+}
+
+void scenario2_SmartPointers() {
+    std::cout << "\n=== Сценарий 2: Исправление через умные указатели ===" << std::endl;
+
+    std::shared_ptr<std::vector<DataBlock>> ptr1 =
+        std::make_shared<std::vector<DataBlock>>();
+
+    
+    ptr1->emplace_back(1);
+    ptr1->emplace_back(2);
+    ptr1->emplace_back(3);
+
+    std::cout << "Счетчик ссылок после создания ptr1: " << ptr1.use_count() << std::endl;
+    std::shared_ptr<std::vector<DataBlock>> pointer2 = ptr1;
+
+    std::cout << "Счетчик ссылок после копирования в pointer2: " << pointer2.use_count() << std::endl;
+    std::cout << "--- Вызов ptr1.reset() ---" << std::endl;
+    ptr1.reset();
+
+  
+    std::cout << "ptr1 сброшен. Данные живы, так как pointer2 все еще владеет ими." << std::endl;
+    std::cout << "Счетчик ссылок у pointer2: " << pointer2.use_count() << std::endl;
+    std::cout << "--- Выход из функции scenario2_SmartPointers ---" << std::endl;
+}
+
+int main() {
+    setlocale(LC_ALL, "Russian");
+    scenario1_Leak();
+    scenario2_SmartPointers();
+
+    return 0;
+}
+
+
+
+
+
