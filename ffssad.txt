@@ -1,0 +1,83 @@
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+
+class DataBlock {
+private:
+    int  data[1024];  
+    int  id;
+
+public:
+    explicit DataBlock(int blockId) : id(blockId) {
+        for (int i = 0; i < 1024; ++i) data[i] = id * 1000 + i;
+
+        std::cout << "[+] Конструктор: Выделена виртуальная страница для Блока #"
+            << id << "\n";
+    }
+
+    ~DataBlock() {
+        std::cout << "[-] Деструктор: ОС освободила страницу Блока #"
+            << id << "\n";
+    }
+
+    int getId() const { return id; }
+
+    DataBlock(const DataBlock&) = delete;
+    DataBlock& operator=(const DataBlock&) = delete;
+};
+
+void scenario1_leak() {
+    std::cout << "\n========== СЦЕНАРИЙ 1: УТЕЧКА ПАМЯТИ ==========\n";
+
+    DataBlock* blocks = new DataBlock[3]{
+        DataBlock(1), DataBlock(2), DataBlock(3)
+    };
+
+    std::cout << "--- Освобождаем через delete (ОШИБКА!) ---\n";
+
+    delete blocks;
+
+    std::cout << "--- Функция вышла. Что мы видим? ---\n"
+        << "    Деструкторы Блоков #2 и #3 НЕ вызвались.\n"
+        << "    Их виртуальные страницы утекли (утечка памяти).\n";
+}
+
+void scenario2_smart_pointers() {
+    std::cout << "\n========== СЦЕНАРИЙ 2: SHARED_PTR ==========\n";
+
+    // Контейнер страниц, обёрнутый в shared_ptr
+    std::shared_ptr<std::vector<DataBlock>> pointer1 =
+        std::make_shared<std::vector<DataBlock>>();
+
+    pointer1->reserve(3);
+    pointer1->emplace_back(1);
+    pointer1->emplace_back(2);
+    pointer1->emplace_back(3);
+
+    std::cout << "use_count после создания pointer1: "
+        << pointer1.use_count() << "\n";
+
+    std::shared_ptr<std::vector<DataBlock>> pointer2 = pointer1;
+
+    std::cout << "use_count после копирования в pointer2: "
+        << pointer1.use_count() << "\n";
+
+    std::cout << "--- Вызываем pointer1.reset() ---\n";
+    pointer1.reset();
+
+    std::cout << "use_count после reset() у pointer1: "
+        << pointer2.use_count() << "\n";
+    std::cout << "Страницы ВСЁ ЕЩЁ живы — владелец остался (pointer2).\n";
+
+    std::cout << "--- Выходим из функции: pointer2 уничтожается ---\n";
+}
+
+int main() {
+    scenario1_leak();
+
+    scenario2_smart_pointers();
+
+    std::cout << "\n========== Программа завершена ==========\n";
+    return 0;
+}
