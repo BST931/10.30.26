@@ -1,0 +1,97 @@
+using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+class ConsoleBufferExample
+{
+    // --- Импорт функций Win32 API ---
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr GetStdHandle(int nStdHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool WriteConsoleOutputW(
+        IntPtr hConsoleOutput,
+        CHAR_INFO[] lpBuffer,
+        COORD dwBufferSize,
+        COORD dwBufferCoord,
+        ref SMALL_RECT lpWriteRegion);
+
+    const int STD_OUTPUT_HANDLE = -11;
+
+    // --- Объявление необходимых структур ---
+    [StructLayout(LayoutKind.Sequential)]
+    public struct COORD
+    {
+        public short X;
+        public short Y;
+        public COORD(short x, short y) { X = x; Y = y; }
+    }
+
+    [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Unicode)]
+    public struct CHAR_INFO
+    {
+        [FieldOffset(0)] public char UnicodeChar;
+        [FieldOffset(0)] public byte AsciiChar;
+        [FieldOffset(2)] public ushort Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SMALL_RECT
+    {
+        public short Left;
+        public short Top;
+        public short Right;
+        public short Bottom;
+        public SMALL_RECT(short left, short top, short right, short bottom)
+        {
+            Left = left; Top = top; Right = right; Bottom = bottom;
+        }
+    }
+
+    static void Main()
+    {
+        // 1. Получаем дескриптор (handle) вывода консоли
+        IntPtr hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hOutput == IntPtr.Zero) return;
+
+        // 2. Инициализируем размеры окна и буфера
+        short width = 80;
+        short height = 25;
+
+        Console.SetWindowSize(width, height);
+        Console.SetBufferSize(width, height);
+        Console.CursorVisible = false;
+
+        // 3. Выделяем память под буфер кадра
+        CHAR_INFO[] buffer = new CHAR_INFO[width * height];
+        COORD bufferSize = new COORD(width, height);
+        COORD bufferCoord = new COORD(0, 0);
+        SMALL_RECT writeRegion = new SMALL_RECT(0, 0, (short)(width - 1), (short)(height - 1));
+
+        Random rand = new Random();
+        string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+        // Главный цикл рендеринга
+        while (true)
+        {
+            // 4. Заполнение буфера данными (генерация кадра)
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int index = y * width + x;
+                    // Записываем символ и случайный цвет
+                    buffer[index].UnicodeChar = chars[rand.Next(chars.Length)];
+                    buffer[index].Attributes = (ushort)rand.Next(1, 256);
+                }
+            }
+
+            // 5. Отрисовка кадра на экране за один системный вызов
+            SMALL_RECT currentRegion = writeRegion;
+            WriteConsoleOutputW(hOutput, buffer, bufferSize, bufferCoord, ref currentRegion);
+
+            // Ограничение частоты кадров (~30 FPS)
+            Thread.Sleep(33);
+        }
+    }
+}
